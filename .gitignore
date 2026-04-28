@@ -1,0 +1,18 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Рабочие данные (входные/выходные файлы)
+data/input/
+data/output/
+data/intermediate/
+data/archive/
+data/tdd_suite.log
+data/*.log
+
+# macOS
+.DS_Store
+.DS_Store?

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tdd-suite"
+version = "3.0.0"
+description = "Комплексная обработка Excel файлов"
+authors = [
+    {name = "TDD Development Team"}
+]
+dependencies = [
+    "pandas>=2.1.0",
+    "openpyxl>=3.1.0",
+    "xlsxwriter>=3.0.0"
+]
+
+[project.urls]
+Repository = "https://github.com/tdd-suite/tdd-suite"
+
+[project.scripts]
+tdd-suite = "main:main"
