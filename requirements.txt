@@ -1,3 +1,5 @@
 pandas>=2.1.0
 openpyxl>=3.1.0
 xlsxwriter>=3.0.0
+halo>=0.0.31
+simple-term-menu==1.6.6; sys_platform != "win32"

@@ -4,8 +4,11 @@
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 import logging
+import sys
+
+from halo import Halo
 
 class ProcessingResult:
     """Результат обработки файла"""
@@ -43,12 +46,12 @@ class BaseProcessor(ABC):
     
     def validate_input_file(self, file_path: Path) -> bool:
         """Валидация входного файла"""
-        if not file_path.exists():
+        if not file_path.is_file() or file_path.name.startswith("~$"):
             self.logger.error(f"Файл не существует: {file_path}")
             return False
         
-        if not file_path.suffix.lower() in ['.xlsx', '.xls']:
-            self.logger.error(f"Неподдерживаемый формат файла: {file_path}")
+        if file_path.suffix.lower() != '.xlsx':
+            self.logger.error(f"Нужен файл .xlsx (старые .xls следует пересохранить): {file_path}")
             return False
         
         return True
@@ -67,18 +70,27 @@ class BaseProcessor(ABC):
         
         for i, file_path in enumerate(input_files, 1):
             try:
-                print(f"\n📄 Обрабатываем ({i}/{len(input_files)}): {file_path.name}")
-                
-                result = self.process_file(file_path, **kwargs)
+                label = f"{self.get_name()} — файл {i} из {len(input_files)}: {file_path.name}"
+                print(f"\n{label}")
+                with Halo(text=f"{self.get_name()} · {i}/{len(input_files)}", spinner="dots",
+                          color="cyan", enabled=sys.stdout.isatty()):
+                    result = self.process_file(file_path, **kwargs)
                 results["results"].append(result)
                 
                 if result.success:
                     results["success"] += 1
                     print(f"✔︎ Успешно: {result.message}")
+                    if result.output_file:
+                        print(f"   Результат: {result.output_file}")
                 else:
                     results["failed"] += 1
                     print(f"✘ Ошибка: {result.message}")
                     results["errors"].append(f"{file_path.name}: {result.message}")
+
+                for warning in result.details.get("warnings", []):
+                    print(f"   ⚠ {warning}")
+                if result.details.get("report_file"):
+                    print(f"   Отчёт: {result.details['report_file']}")
                     
             except Exception as e:
                 results["failed"] += 1
@@ -88,7 +100,7 @@ class BaseProcessor(ABC):
                 self.logger.error(f"Ошибка обработки {file_path}: {e}")
         
         # Итоговый отчет
-        print(f"\n🎉 ПАКЕТНАЯ ОБРАБОТКА ЗАВЕРШЕНА:")
+        print("\nОБРАБОТКА ЗАВЕРШЕНА:")
         print(f"   ✔︎ Успешно: {results['success']}/{results['total']}")
         print(f"   ✘ Ошибок: {results['failed']}/{results['total']}")
         

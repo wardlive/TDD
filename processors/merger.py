@@ -8,7 +8,7 @@ import pandas as pd
 from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
-from openpyxl.utils import get_column_letter
+from openpyxl.utils import get_column_letter, column_index_from_string
 from core.base_processor import BaseProcessor, ProcessingResult
 
 class SheetMerger(BaseProcessor):
@@ -38,6 +38,7 @@ class SheetMerger(BaseProcessor):
     
     def process_file(self, input_path: Path, **kwargs) -> ProcessingResult:
         """Объединение листов PL INV в файле"""
+        book = None
         try:
             if not self.validate_input_file(input_path):
                 return ProcessingResult(
@@ -59,24 +60,14 @@ class SheetMerger(BaseProcessor):
                     message="Не найдено листов с названием 'PL INV'"
                 )
             
-            print(f"📋 Файл: {input_path.name}")
-            print(f"📋 Найдено {len(pl_sheets)} листов PL INV:")
-            for sheet in pl_sheets:
-                print(f"   • {sheet}")
-            
             # Читаем и объединяем все листы PL INV
             merged_data = []
-            total_rows = 0
-            
-            for sheet_name in pl_sheets:
-                df = self._read_sheet(input_path, sheet_name)
-                merged_data.append(df)
-                total_rows += len(df)
-                print(f"   • {sheet_name}: {len(df)} строк после очистки")
+            with pd.ExcelFile(input_path, engine="openpyxl") as excel_file:
+                for sheet_name in pl_sheets:
+                    merged_data.append(self._read_sheet(excel_file, sheet_name))
             
             # Объединяем все данные
             merged_df = pd.concat(merged_data, ignore_index=True)
-            print(f"📊 Сводная таблица: {len(merged_df)} строк")
             
             # Создаем/обновляем лист "Общий"
             if self.TARGET_SHEET in book.sheetnames:
@@ -97,7 +88,8 @@ class SheetMerger(BaseProcessor):
             
             # Сохраняем файл
             output_path = self.file_manager.generate_output_path(input_path, "_merged")
-            book.save(output_path)
+            with self.file_manager.atomic_output(output_path) as temporary_path:
+                book.save(temporary_path)
             
             # Архивирование исходного файла
             self.file_manager.archive_file(input_path)
@@ -120,6 +112,9 @@ class SheetMerger(BaseProcessor):
             error_msg = f"Ошибка объединения: {str(e)}"
             self.logger.error(f"Ошибка обработки {input_path}: {e}")
             return ProcessingResult(success=False, input_file=input_path, message=error_msg)
+        finally:
+            if book is not None:
+                book.close()
     
     def _is_pl_inv(self, sheet_name: str) -> bool:
         """Проверка, является ли лист листом PL INV"""
@@ -131,24 +126,22 @@ class SheetMerger(BaseProcessor):
         df = df.dropna(how='all')
         
         # Создаем маску для удаления строк с нежелательными данными
-        mask = df.apply(
-            lambda row: row.fillna('').astype(str).str.strip()
-                        .str.match(self.RE_UNWANTED).any(),
-            axis=1
-        )
+        mask = df.fillna('').astype(str).apply(
+            lambda column: column.str.strip().str.match(self.RE_UNWANTED)
+        ).any(axis=1)
         
         return df.loc[~mask].reset_index(drop=True)
     
     def _read_sheet(self, file_path: Path, sheet_name: str) -> pd.DataFrame:
         """Чтение и обработка одного листа PL INV"""
         # Читаем лист как строки для сохранения форматирования
-        df = pd.read_excel(file_path, sheet_name=sheet_name, dtype=str, engine=self.settings.excel_engine)
+        df = pd.read_excel(file_path, sheet_name=sheet_name, dtype=str, engine="openpyxl")
         
         # Очищаем от ненужных строк
         df = self._clean_dataframe(df)
         
         # Добавляем столбец с номером инвойса в начало
-        invoice_number = sheet_name.split('PL INV', 1)[1].strip() if 'PL INV' in sheet_name else sheet_name
+        invoice_number = self.PATTERN_PL.sub('', sheet_name.strip(), count=1).strip()
         df.insert(0, 'Invoice', invoice_number)
         
         return df
@@ -157,7 +150,7 @@ class SheetMerger(BaseProcessor):
         """Применение форматирования к рабочему листу"""
         try:
             # Форматирование числового столбца R (если существует)
-            if 'R' <= get_column_letter(ws.max_column):
+            if ws.max_column >= column_index_from_string('R'):
                 self._format_numeric_column(ws, 'R', 3, last_row)
                 
                 # Добавляем формулу SUBTOTAL в R1
@@ -165,7 +158,7 @@ class SheetMerger(BaseProcessor):
             
             # Применяем зеленую заливку к столбцам D и R
             for col_letter in ('D', 'R'):
-                if col_letter <= get_column_letter(ws.max_column):
+                if column_index_from_string(col_letter) <= ws.max_column:
                     for row in range(1, last_row + 1):
                         cell = ws[f'{col_letter}{row}']
                         cell.fill = self.GREEN_FILL
@@ -173,11 +166,9 @@ class SheetMerger(BaseProcessor):
             # Автоматическая настройка ширины столбцов и форматирование заголовков
             self._autosize_columns(ws)
             
-            print("✓ Применено форматирование: зеленая заливка, жирные заголовки, автоширина")
             
         except Exception as e:
             self.logger.warning(f"Ошибка применения форматирования: {e}")
-            print(f"⚠️ Частичная ошибка форматирования: {e}")
     
     def _format_numeric_column(self, ws, col_letter: str, start_row: int, end_row: int) -> None:
         """Форматирование числового столбца"""

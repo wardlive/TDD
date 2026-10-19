@@ -20,15 +20,12 @@ class Settings:
     
     # Настройки обработки
     auto_archive: bool = True
-    create_backups: bool = True
-    preserve_timestamps: bool = True
     
     # Настройки Excel
     excel_engine: str = "openpyxl"
-    default_header_row: int = 1
     
     # Настройки сжатия
-    compression_mode: str = "simple"  # "simple" или "with_percentages"
+    compression_mode: str = "with_percentages"  # "simple" или "with_percentages"
     
     def __post_init__(self):
         """Инициализация путей после создания объекта"""
@@ -59,8 +56,5 @@ class Settings:
         return {
             "compression_mode": self.compression_mode,
             "auto_archive": self.auto_archive,
-            "create_backups": self.create_backups,
-            "preserve_timestamps": self.preserve_timestamps,
             "excel_engine": self.excel_engine,
-            "default_header_row": self.default_header_row
         }
