@@ -1,14 +1,7 @@
 @echo off
-setlocal
+setlocal DisableDelayedExpansion
 chcp 65001 >nul
 set "PYTHONUTF8=1"
-cd /d "%~dp0"
-if not exist ".venv\Scripts\python.exe" (
-    echo Сначала настройте программу по инструкции в README.md, раздел «Как запустить на Windows».
-    pause
-    exit /b 1
-)
-".venv\Scripts\python.exe" main.py
-set "TDD_EXIT_CODE=%ERRORLEVEL%"
-if not "%TDD_EXIT_CODE%"=="0" pause
-exit /b %TDD_EXIT_CODE%
+set "TDD_PROJECT_DIR=%~dp0"
+start "TDD" "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -Command "try { $ErrorActionPreference = 'Stop'; Set-Location -LiteralPath $env:TDD_PROJECT_DIR; if (-not (Test-Path -LiteralPath '.\.venv\Scripts\python.exe' -PathType Leaf)) { throw 'Сначала настройте программу по инструкции в README.md.' }; & '.\.venv\Scripts\python.exe' main.py; $code = $LASTEXITCODE; if ($code -ne 0) { Read-Host 'Нажмите Enter, чтобы закрыть окно' }; exit $code } catch { Write-Host $_ -ForegroundColor Red; Read-Host 'Нажмите Enter, чтобы закрыть окно'; exit 1 }"
+exit /b %ERRORLEVEL%
